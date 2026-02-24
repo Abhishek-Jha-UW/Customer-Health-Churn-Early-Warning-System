@@ -2,204 +2,124 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import io
 from xgboost import XGBClassifier
+from sklearn.preprocessing import StandardScaler
 import plotly.express as px
 
-# ---------------- PAGE CONFIG ---------------- #
-st.set_page_config(
-    page_title="Customer Health Early Warning System",
-    page_icon="🛡️",
-    layout="wide"
-)
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="Churn Early Warning System", layout="wide")
 
-# ---------------- CONSTANTS ---------------- #
-REQUIRED_COLS = ['recency', 'frequency', 'monetary', 'tenure']
-HIGH_RISK_THRESHOLD = 0.7
-MEDIUM_RISK_THRESHOLD = 0.3
-
-# ---------------- LOAD MODEL ASSETS ---------------- #
-@st.cache_resource
-def load_assets():
-    try:
-        model = XGBClassifier()
-        model.load_model("churn_model.json")
-        scaler = joblib.load("scaler.pkl")
-        return model, scaler
-    except Exception as e:
-        st.error(f"❌ Error loading model artifacts: {e}")
-        return None, None
-
-model, scaler = load_assets()
-
-if model is None or scaler is None:
-    st.warning("⚠️ Ensure 'churn_model.json' and 'scaler.pkl' exist in the root directory.")
-    st.stop()
-
-# ---------------- HELPER FUNCTIONS ---------------- #
-def validate_input(df):
-    missing = [col for col in REQUIRED_COLS if col not in df.columns]
-    return missing
-
-def add_predictions(df):
-    X_scaled = scaler.transform(df[REQUIRED_COLS])
-    df['Churn_Prob'] = model.predict_proba(X_scaled)[:, 1]
-
-    df['Risk_Level'] = pd.cut(
-        df['Churn_Prob'],
-        bins=[-1, MEDIUM_RISK_THRESHOLD, HIGH_RISK_THRESHOLD, 1],
-        labels=['🟢 Healthy', '🟡 Medium Risk', '🔴 High Risk']
-    )
-
+# --- CORE LOGIC: TRAINING & ASSETS ---
+def generate_synthetic_data(rows=1000):
+    """Generates a robust synthetic dataset for training/demo."""
+    np.random.seed(42)
+    data = {
+        'customer_id': range(1, rows + 1),
+        'recency': np.random.randint(1, 100, rows),
+        'frequency': np.random.randint(1, 20, rows),
+        'monetary': np.random.uniform(50, 5000, rows),
+        'tenure': np.random.randint(10, 500, rows)
+    }
+    df = pd.DataFrame(data)
+    # Target: Higher recency and lower frequency = Higher Churn probability
+    df['churn'] = ((df['recency'] * 0.7) - (df['frequency'] * 2) > 20).astype(int)
     return df
 
-def get_sample_data():
-    return pd.DataFrame({
-        'customer_id': [1001, 1002, 1003, 1004, 1005],
-        'recency': [5, 82, 45, 98, 12],
-        'frequency': [25, 2, 12, 1, 18],
-        'monetary': [4500.0, 150.0, 1100.0, 45.0, 3200.0],
-        'tenure': [450, 30, 200, 15, 380]
-    })
+@st.cache_resource
+def get_trained_assets():
+    """Trains the model inside the app if not already present."""
+    df = generate_synthetic_data()
+    X = df[['recency', 'frequency', 'monetary', 'tenure']]
+    y = df['churn']
+    
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    model = XGBClassifier(n_estimators=100, max_depth=3, learning_rate=0.1)
+    model.fit(X_scaled, y)
+    
+    return model, scaler
 
-# ---------------- HEADER ---------------- #
+model, scaler = get_trained_assets()
+
+# --- UI HEADER ---
 st.title("🛡️ Customer Health & Churn Early Warning System")
-st.markdown("""
-This tool uses an **XGBoost Machine Learning model** trained on RFM metrics  
-to proactively detect customer churn risk.
-""")
+st.markdown("This tool uses XGBoost to predict churn risk based on **RFM** (Recency, Frequency, Monetary) metrics.")
 
-# ---------------- SIDEBAR ---------------- #
-st.sidebar.header("🛠️ Analysis Controls")
-mode = st.sidebar.radio("Choose Input Mode:", ["Bulk Analysis (CSV)", "Single Customer Simulator"])
+# --- SIDEBAR: DOWNLOAD TEMPLATE & UPLOAD ---
+st.sidebar.header("1. Get the Template")
+template_df = pd.DataFrame(columns=['customer_id', 'recency', 'frequency', 'monetary', 'tenure'])
+template_df.loc[0] = [123, 10, 5, 500.0, 100]
 
-# ==========================================================
-# MODE 1: BULK ANALYSIS
-# ==========================================================
-if mode == "Bulk Analysis (CSV)":
+# Download Template as Excel
+buffer = io.BytesIO()
+with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+    template_df.to_excel(writer, index=False, sheet_name='Sheet1')
+st.sidebar.download_button(
+    label="📥 Download Excel Template",
+    data=buffer.getvalue(),
+    file_name="churn_template.xlsx",
+    mime="application/vnd.ms-excel"
+)
 
-    st.sidebar.subheader("Upload Data")
-    uploaded_file = st.sidebar.file_uploader("Upload customer CSV", type="csv")
+st.sidebar.divider()
+st.sidebar.header("2. Upload Your Data")
+uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
 
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        st.success("File uploaded successfully!")
+# --- DATA PROCESSING ---
+if uploaded_file is not None:
+    if uploaded_file.name.endswith('.csv'):
+        df_input = pd.read_csv(uploaded_file)
     else:
-        st.info("Showing sample data. Upload your CSV for real analysis.")
-        df = get_sample_data()
-
-    missing_cols = validate_input(df)
-
-    if missing_cols:
-        st.error(f"Missing required columns: {missing_cols}")
-        st.stop()
-
-    df = add_predictions(df)
-
-    # ---------- KPI METRICS ----------
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Total Customers", len(df))
-    m2.metric("High Risk Accounts", (df['Churn_Prob'] > HIGH_RISK_THRESHOLD).sum())
-    m3.metric("Avg. Churn Probability", f"{df['Churn_Prob'].mean():.1%}")
-
-    st.divider()
-
-    # ---------- VISUALS ----------
-    col_left, col_right = st.columns([2, 1])
-
-    with col_left:
-        st.subheader("Customer Health Map")
-        fig = px.scatter(
-            df,
-            x="recency",
-            y="monetary",
-            color="Risk_Level",
-            size="frequency",
-            hover_data=['customer_id'],
-            labels={
-                "recency": "Days Since Last Purchase",
-                "monetary": "Lifetime Value ($)"
-            },
-            color_discrete_map={
-                '🔴 High Risk': 'red',
-                '🟡 Medium Risk': 'orange',
-                '🟢 Healthy': 'green'
-            }
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col_right:
-        st.subheader("Risk Distribution")
-        pie = px.pie(
-            df,
-            names='Risk_Level',
-            color='Risk_Level',
-            color_discrete_map={
-                '🔴 High Risk': 'red',
-                '🟡 Medium Risk': 'orange',
-                '🟢 Healthy': 'green'
-            }
-        )
-        st.plotly_chart(pie, use_container_width=True)
-
-    # ---------- TABLE ----------
-    st.subheader("Detailed Risk Table")
-    st.dataframe(
-        df.sort_values("Churn_Prob", ascending=False),
-        use_container_width=True
-    )
-
-    # ---------- DOWNLOAD ----------
-    st.download_button(
-        "📩 Download Analysis Results",
-        df.to_csv(index=False).encode("utf-8"),
-        "churn_analysis.csv",
-        "text/csv"
-    )
-
-# ==========================================================
-# MODE 2: SINGLE CUSTOMER SIMULATOR
-# ==========================================================
+        df_input = pd.read_excel(uploaded_file)
+    st.success("Custom data loaded!")
 else:
+    st.info("💡 Currently showing **Synthetic Demo Data**. Upload your own file in the sidebar to switch.")
+    df_input = generate_synthetic_data(rows=100)
 
-    st.subheader("Single Customer 'What-If' Simulator")
-
-    c1, c2 = st.columns(2)
-
-    with c1:
-        s_recency = st.slider("Recency (Days since last activity)", 1, 120, 30)
-        s_frequency = st.slider("Frequency (Total orders)", 1, 50, 5)
-
-    with c2:
-        s_monetary = st.number_input("Monetary Value ($)", 10, 10000, 500)
-        s_tenure = st.slider("Tenure (Days as customer)", 1, 1000, 100)
-
-    single_input = pd.DataFrame(
-        [[s_recency, s_frequency, s_monetary, s_tenure]],
-        columns=REQUIRED_COLS
+# Validate Columns
+required = ['recency', 'frequency', 'monetary', 'tenure']
+if all(col in df_input.columns for col in required):
+    
+    # Inference
+    X_custom = df_input[required]
+    X_custom_scaled = scaler.transform(X_custom)
+    df_input['Churn_Probability'] = model.predict_proba(X_custom_scaled)[:, 1]
+    df_input['Risk_Level'] = df_input['Churn_Probability'].apply(
+        lambda x: '🔴 High' if x > 0.7 else ('🟡 Medium' if x > 0.3 else '🟢 Low')
     )
 
-    scaled_input = scaler.transform(single_input)
-    prob = model.predict_proba(scaled_input)[0][1]
+    # --- DASHBOARD ---
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total Analyzed", len(df_input))
+    m2.metric("At-Risk Customers", len(df_input[df_input['Churn_Probability'] > 0.5]))
+    m3.metric("Avg Risk Score", f"{df_input['Churn_Probability'].mean():.1%}")
 
     st.divider()
 
-    r1, r2 = st.columns(2)
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        st.subheader("Customer Health Segments")
+        fig = px.scatter(df_input, x="recency", y="monetary", color="Risk_Level",
+                         size="frequency", hover_data=['customer_id'],
+                         color_discrete_map={'🔴 High': '#ef553b', '🟡 Medium': '#fecb52', '🟢 Low': '#00cc96'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with c2:
+        st.subheader("Risk Distribution")
+        fig_pie = px.pie(df_input, names='Risk_Level', 
+                         color='Risk_Level', color_discrete_map={'🔴 High': '#ef553b', '🟡 Medium': '#fecb52', '🟢 Low': '#00cc96'})
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-    with r1:
-        st.metric("Predicted Churn Risk", f"{prob:.1%}")
+    st.subheader("Detailed Prediction Results")
+    st.dataframe(df_input.sort_values('Churn_Probability', ascending=False), use_container_width=True)
 
-        if prob > HIGH_RISK_THRESHOLD:
-            st.error("🔴 High Risk – Immediate retention action recommended")
-        elif prob > MEDIUM_RISK_THRESHOLD:
-            st.warning("🟡 Medium Risk – Consider targeted nurture campaign")
-        else:
-            st.success("🟢 Healthy – Maintain engagement strategy")
+    # Download Results
+    output_buffer = io.BytesIO()
+    with pd.ExcelWriter(output_buffer, engine='xlsxwriter') as writer:
+        df_input.to_excel(writer, index=False)
+    st.download_button("📩 Download Full Results (Excel)", output_buffer.getvalue(), "churn_predictions.xlsx")
 
-    with r2:
-        st.write("### Risk Drivers (Heuristic Insight)")
-        if s_recency > 60:
-            st.write("• High inactivity driving churn risk")
-        if s_frequency < 3:
-            st.write("• Low purchase frequency")
-        if s_monetary < 200:
-            st.write("• Low lifetime value customer")
+else:
+    st.error(f"Error: Your file must contain these columns: {required}")
