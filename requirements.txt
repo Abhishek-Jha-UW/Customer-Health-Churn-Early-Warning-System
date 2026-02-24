@@ -10,6 +10,7 @@ plotly
 # Machine Learning
 scikit-learn
 xgboost
+joblib
 
 # Deployment
 streamlit
