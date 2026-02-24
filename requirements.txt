@@ -1,0 +1,18 @@
+# Data Manipulation
+pandas
+numpy
+
+# Visualization
+matplotlib
+seaborn
+plotly
+
+# Machine Learning
+scikit-learn
+xgboost
+
+# Deployment
+streamlit
+
+# Statistical Analysis
+statsmodels
