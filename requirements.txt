@@ -6,6 +6,7 @@ numpy
 matplotlib
 seaborn
 plotly
+altair>=5.0.0
 
 # Machine Learning
 scikit-learn
@@ -13,7 +14,7 @@ xgboost
 joblib
 
 # Deployment
-streamlit
+streamlit>=1.30.0
 
 # Statistical Analysis
 statsmodels
