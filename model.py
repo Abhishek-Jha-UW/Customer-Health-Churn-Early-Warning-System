@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import joblib # To save/load the scaler
 import datetime as dt
 
 def generate_data():
@@ -25,13 +27,22 @@ def train_model(df):
     
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    model = XGBClassifier(n_estimators=100, max_depth=3, learning_rate=0.1)
-    model.fit(X_train, y_train)
+    # Initialize and fit StandardScaler
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    # No need to scale X_test for XGBoost, but good practice if other models are used
+    
+    model = XGBClassifier(n_estimators=100, max_depth=3, learning_rate=0.1, random_state=42)
+    model.fit(X_train_scaled, y_train)
     
     # Save the model
     model.save_model("churn_model.json")
+    # Save the scaler
+    joblib.dump(scaler, "scaler.pkl")
+    
     print("Model trained and saved as churn_model.json")
-    return model
+    print("Scaler saved as scaler.pkl")
+    return model, scaler # Return both for potential use
 
 if __name__ == "__main__":
     df = generate_data()
