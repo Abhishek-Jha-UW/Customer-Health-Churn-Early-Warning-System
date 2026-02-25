@@ -26,22 +26,36 @@ def generate_synthetic_data(rows=1000):
     df['churn'] = ((df['recency'] * 0.7) - (df['frequency'] * 2) > 20).astype(int)
     return df
 
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+
 @st.cache_resource
 def get_trained_assets():
-    """Trains the model inside the app if not already present."""
+    """Trains the model with a 80/20 split and returns the accuracy score."""
     df = generate_synthetic_data()
     X = df[['recency', 'frequency', 'monetary', 'tenure']]
     y = df['churn']
     
+    # 1. Split the data (80% for training, 20% for testing)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # 2. Scale based ONLY on the training data to prevent "data leakage"
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
     
+    # 3. Train the model
     model = XGBClassifier(n_estimators=100, max_depth=3, learning_rate=0.1)
-    model.fit(X_scaled, y)
+    model.fit(X_train_scaled, y_train)
     
-    return model, scaler
+    # 4. Evaluate performance
+    y_pred = model.predict(X_test_scaled)
+    acc = accuracy_score(y_test, y_pred)
+    
+    return model, scaler, acc
 
-model, scaler = get_trained_assets()
+# Note: We now unpack THREE variables
+model, scaler, model_accuracy = get_trained_assets()
 
 # --- UI HEADER ---
 st.title("🛡️ Customer Health & Churn Early Warning System")
@@ -51,6 +65,7 @@ st.markdown("This tool uses XGBoost to predict churn risk based on **RFM** (Rece
 st.sidebar.header("1. Get the Template")
 template_df = pd.DataFrame(columns=['customer_id', 'recency', 'frequency', 'monetary', 'tenure'])
 template_df.loc[0] = [123, 10, 5, 500.0, 100]
+st.sidebar.write(f"📈 Model Training Accuracy: {accuracy:.1%}")
 
 # Download Template as Excel
 buffer = io.BytesIO()
