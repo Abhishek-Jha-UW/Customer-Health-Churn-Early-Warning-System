@@ -60,13 +60,12 @@ model, scaler, model_accuracy = get_trained_assets()
 # --- UI HEADER ---
 st.title("🛡️ Customer Health & Churn Early Warning System")
 st.markdown("This tool uses XGBoost to predict churn risk based on **RFM** (Recency, Frequency, Monetary) metrics.")
-st.sidebar.write(f"📈 Model Training Accuracy: {model_accuracy:.1%}")
 
 # --- SIDEBAR: DOWNLOAD TEMPLATE & UPLOAD ---
 st.sidebar.header("1. Get the Template")
 template_df = pd.DataFrame(columns=['customer_id', 'recency', 'frequency', 'monetary', 'tenure'])
 template_df.loc[0] = [123, 10, 5, 500.0, 100]
-st.sidebar.write(f"📈 Model Training Accuracy: {model_accuracy:.1%}")
+
 
 # Download Template as Excel
 buffer = io.BytesIO()
@@ -106,8 +105,15 @@ if all(col in df_input.columns for col in required):
         lambda x: '🔴 High' if x > 0.7 else ('🟡 Medium' if x > 0.3 else '🟢 Low')
     )
 
-    # --- DASHBOARD ---
-    m1, m2, m3 = st.columns(3)
+    st.divider()
+    # --- DASHBOARD HEADER ---
+    # We create 4 columns instead of 3
+    m0, m1, m2, m3 = st.columns(4)
+
+    # 1. Show the Model's "Test Grade" first
+    m0.metric("Model Training Accuracy", f"{model_accuracy:.1%}")
+
+    # 2. Show the overall stats for the uploaded/synthetic data
     m1.metric("Total Analyzed", len(df_input))
     m2.metric("At-Risk Customers", len(df_input[df_input['Churn_Probability'] > 0.5]))
     m3.metric("Avg Risk Score", f"{df_input['Churn_Probability'].mean():.1%}")
