@@ -106,10 +106,10 @@ if all(col in df_input.columns for col in required):
     )
 
     # --- DASHBOARD HEADER ---
-    m0, m1, m2, m3 = st.columns(4)
+m0, m1, m2, m3 = st.columns(4)
 
-    # 1. Logic for Live vs. Static Accuracy
-    if uploaded_file is not None and 'churn' in df_input.columns:
+# 1. Logic for Live vs. Static Accuracy
+if uploaded_file is not None and 'churn' in df_input.columns:
     # Calculate how well our model performs on the NEW data
     y_true = df_input['churn']
     X_new_scaled = scaler.transform(df_input[required])
@@ -118,18 +118,17 @@ if all(col in df_input.columns for col in required):
     
     m0.metric("Data Match Accuracy", f"{live_accuracy:.1%}", 
               help="How well the pre-trained model fits your uploaded data.")
-    else:
+else:
     # Default back to the synthetic training accuracy
     m0.metric("Model Training Accuracy", f"{model_accuracy:.1%}",
               help="Accuracy based on the initial synthetic training set.")
 
-    # 2. The rest of your metrics stay the same
-    m1.metric("Total Analyzed", len(df_input))
-    m2.metric("At-Risk Customers", len(df_input[df_input['Churn_Probability'] > 0.5]))
-    m3.metric("Avg Risk Score", f"{df_input['Churn_Probability'].mean():.1%}")
+# 2. The rest of your metrics stay the same
+m1.metric("Total Analyzed", len(df_input))
+m2.metric("At-Risk Customers", len(df_input[df_input['Churn_Probability'] > 0.5]))
+m3.metric("Avg Risk Score", f"{df_input['Churn_Probability'].mean():.1%}")
 
-    st.divider()
-
+st.divider()
     c1, c2 = st.columns([2, 1])
     with c1:
         st.subheader("Customer Health Segments")
