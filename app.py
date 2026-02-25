@@ -60,6 +60,7 @@ model, scaler, model_accuracy = get_trained_assets()
 # --- UI HEADER ---
 st.title("🛡️ Customer Health & Churn Early Warning System")
 st.markdown("This tool uses XGBoost to predict churn risk based on **RFM** (Recency, Frequency, Monetary) metrics.")
+st.sidebar.write(f"📈 Model Training Accuracy: {model_accuracy:.1%}")
 
 # --- SIDEBAR: DOWNLOAD TEMPLATE & UPLOAD ---
 st.sidebar.header("1. Get the Template")
