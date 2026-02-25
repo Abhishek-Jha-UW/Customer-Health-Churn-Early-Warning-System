@@ -65,7 +65,7 @@ st.markdown("This tool uses XGBoost to predict churn risk based on **RFM** (Rece
 st.sidebar.header("1. Get the Template")
 template_df = pd.DataFrame(columns=['customer_id', 'recency', 'frequency', 'monetary', 'tenure'])
 template_df.loc[0] = [123, 10, 5, 500.0, 100]
-st.sidebar.write(f"📈 Model Training Accuracy: {accuracy:.1%}")
+st.sidebar.write(f"📈 Model Training Accuracy: {model_accuracy:.1%}")
 
 # Download Template as Excel
 buffer = io.BytesIO()
